@@ -12,6 +12,8 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  
   <script>
     tailwind.config = {
       theme: {
@@ -46,14 +48,13 @@
     .font-bebas { font-family: 'Bebas Neue', Impact, sans-serif; text-transform: uppercase; letter-spacing: 0.04em; }
     .gold-rule { height: 1px; width: 100%; background: linear-gradient(to right, transparent, #C8A97E, transparent); }
     
-    /* Reveal Animation Classes */
     .reveal-section { transition: all 800ms cubic-bezier(0.19, 1, 0.22, 1); opacity: 0; transform: translateY(2rem); }
     .reveal-section.shown { opacity: 1; transform: translateY(0); }
     
-    /* Marquee Animation */
-    .animate-marquee { animation: kcMq 24s linear infinite; }
+    /* Perfect Infinite Loop Marquee */
+    .animate-marquee { animation: kcMq 25s linear infinite; }
+    .animate-marquee:hover { animation-play-state: paused; }
     
-    /* Hide scrollbar for game */
     canvas { touch-action: none; }
   </style>
 </head>
@@ -72,7 +73,7 @@
       </nav>
       <div class="hidden md:flex items-center gap-5">
         <a href="tel:+12036264931" class="text-[14px] text-[#C8A97E]/65 hover:text-[#C8A97E] transition-colors duration-300 tracking-[0.03em]">+1 (203) 626-4931</a>
-        <a href="#product" class="border border-[#C8A97E] text-[#C8A97E] text-[14px] uppercase tracking-[0.14em] px-6 py-2.5 hover:bg-[#C8A97E] hover:text-[#1A1A1A] transition-all duration-300">Shop Now</a>
+        <button onclick="openOrderModal()" class="border border-[#C8A97E] text-[#C8A97E] text-[14px] uppercase tracking-[0.14em] px-6 py-2.5 hover:bg-[#C8A97E] hover:text-[#1A1A1A] transition-all duration-300">Shop Now</button>
       </div>
     </div>
   </header>
@@ -95,15 +96,15 @@
         <span class="hover:text-[#C8A97E] transition-colors duration-300">Rooted in Mystique</span>
       </div>
       <div class="mt-14 flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-up" style="animation-delay: 1.2s;">
-        <a href="#product" class="text-[14px] uppercase tracking-[0.2em] bg-[#C8A97E] text-[#1A1A1A] font-bold px-10 py-4 hover:bg-[#DFC49A] transition-all shadow-[0_0_40px_rgba(200,169,126,0.3)]">Shop the Collection</a>
+        <button onclick="openOrderModal()" class="text-[14px] uppercase tracking-[0.2em] bg-[#C8A97E] text-[#1A1A1A] font-bold px-10 py-4 hover:bg-[#DFC49A] transition-all shadow-[0_0_40px_rgba(200,169,126,0.3)]">Shop the Collection</button>
       </div>
     </div>
   </section>
 
   <section class="bg-[#E8D8C4] py-5 overflow-hidden">
     <div class="flex items-center whitespace-nowrap animate-marquee">
-      <span class="font-bebas text-[17px] text-[#1A1A1A] tracking-[0.18em] flex items-center gap-10 px-8">HAITIAN-INSPIRED <span class="text-[#C8A97E] text-[8px]">◆</span> LATIN AMERICAN BEANS <span class="text-[#C8A97E] text-[8px]">◆</span> CRAFTED IN CONNECTICUT, USA <span class="text-[#C8A97E] text-[8px]">◆</span> SMALL-BATCH ROASTED <span class="text-[#C8A97E] text-[8px]">◆</span></span>
-      <span class="font-bebas text-[17px] text-[#1A1A1A] tracking-[0.18em] flex items-center gap-10 px-8">HAITIAN-INSPIRED <span class="text-[#C8A97E] text-[8px]">◆</span> LATIN AMERICAN BEANS <span class="text-[#C8A97E] text-[8px]">◆</span> CRAFTED IN CONNECTICUT, USA <span class="text-[#C8A97E] text-[8px]">◆</span> SMALL-BATCH ROASTED <span class="text-[#C8A97E] text-[8px]">◆</span></span>
+      <span class="font-bebas text-[17px] text-[#1A1A1A] tracking-[0.18em] flex items-center gap-10 px-8">HAITIAN-INSPIRED <span class="text-[#C8A97E] text-[8px]">◆</span> LATIN AMERICAN BEANS <span class="text-[#C8A97E] text-[8px]">◆</span> CRAFTED IN CONNECTICUT, USA <span class="text-[#C8A97E] text-[8px]">◆</span> SMALL-BATCH ROASTED <span class="text-[#C8A97E] text-[8px]">◆</span> HAITIAN-INSPIRED <span class="text-[#C8A97E] text-[8px]">◆</span> LATIN AMERICAN BEANS <span class="text-[#C8A97E] text-[8px]">◆</span> CRAFTED IN CONNECTICUT, USA <span class="text-[#C8A97E] text-[8px]">◆</span> SMALL-BATCH ROASTED <span class="text-[#C8A97E] text-[8px]">◆</span></span>
+      <span class="font-bebas text-[17px] text-[#1A1A1A] tracking-[0.18em] flex items-center gap-10 px-8">HAITIAN-INSPIRED <span class="text-[#C8A97E] text-[8px]">◆</span> LATIN AMERICAN BEANS <span class="text-[#C8A97E] text-[8px]">◆</span> CRAFTED IN CONNECTICUT, USA <span class="text-[#C8A97E] text-[8px]">◆</span> SMALL-BATCH ROASTED <span class="text-[#C8A97E] text-[8px]">◆</span> HAITIAN-INSPIRED <span class="text-[#C8A97E] text-[8px]">◆</span> LATIN AMERICAN BEANS <span class="text-[#C8A97E] text-[8px]">◆</span> CRAFTED IN CONNECTICUT, USA <span class="text-[#C8A97E] text-[8px]">◆</span> SMALL-BATCH ROASTED <span class="text-[#C8A97E] text-[8px]">◆</span></span>
     </div>
   </section>
 
@@ -118,7 +119,7 @@
         <div class="reveal-section" style="transition-delay: 100ms;">
           <div class="relative aspect-[4/5] flex items-center justify-center overflow-hidden border border-[rgba(200,169,126,0.2)]" style="background: radial-gradient(ellipse 80% 80% at 50% 40%, rgba(200,169,126,0.12) 0%, rgba(26,26,26,0.6) 60%, #111 100%);">
             <div class="relative w-3/5 max-w-[240px] aspect-[3/4] flex items-center justify-center">
-              <img src="./images/bag-konncafe-v0.png" alt="KonnCafe Espresso Ground 8 oz" class="object-contain drop-shadow-[0_20px_48px_rgba(0,0,0,0.85)]" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'240\' height=\'320\'><rect width=\'240\' height=\'320\' fill=\'%23111\'/><text x=\'50%\' y=\'50%\' fill=\'%23C8A97E\' font-family=\'Impact\' font-size=\'20\' text-anchor=\'middle\'>PRODUCT IMAGE</text></svg>'"/>
+              <img src="./images/konncafebag0.png" alt="KonnCafe Espresso Ground 8 oz" class="object-contain drop-shadow-[0_20px_48px_rgba(0,0,0,0.85)]" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'240\' height=\'320\'><rect width=\'240\' height=\'320\' fill=\'%23111\'/><text x=\'50%\' y=\'50%\' fill=\'%23C8A97E\' font-family=\'Impact\' font-size=\'20\' text-anchor=\'middle\'>PRODUCT IMAGE</text></svg>'"/>
             </div>
             <div class="absolute -bottom-4 -right-4 w-24 h-24 rounded-full flex flex-col items-center justify-center text-center bg-[#C8A97E] shadow-[0_8px_32px_rgba(200,169,126,0.4)]">
               <span class="font-bebas text-[11px] text-[#1A1A1A] tracking-[0.1em] leading-none">SMALL<br/>BATCH</span>
@@ -136,7 +137,7 @@
             <span class="text-[14px] text-[#F5F5F5]/35 mb-2 line-through">$18.00</span>
           </div>
 
-          <button class="w-full text-[14px] uppercase tracking-[0.2em] font-bold bg-[#C8A97E] text-[#1A1A1A] py-4 mb-4 hover:bg-[#DFC49A] transition-all">Add to Cart — $13.99</button>
+          <button onclick="openOrderModal()" class="w-full text-[14px] uppercase tracking-[0.2em] font-bold bg-[#C8A97E] text-[#1A1A1A] py-4 mb-4 hover:bg-[#DFC49A] transition-all">Add to Cart — $13.99</button>
 
           <div class="flex border-b border-[rgba(245,245,245,0.1)] mb-8">
             <button onclick="switchTab('notes')" id="btn-notes" class="tab-btn pb-3 mr-7 text-[14px] uppercase tracking-[0.12em] transition-all border-b-2 -mb-px text-[#C8A97E] border-[#C8A97E]">Treasured Notes</button>
@@ -235,9 +236,32 @@
     </div>
   </footer>
 
+  <div id="orderModal" class="fixed inset-0 bg-[#1A1A1A]/95 z-[100] hidden items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-[#F5F5F5] text-[#1A1A1A] p-8 max-w-md w-full relative border border-[#C8A97E]">
+      <button onclick="closeOrderModal()" class="absolute top-4 right-4 text-3xl font-bold">&times;</button>
+      <h3 class="font-bebas text-4xl mb-2">Request an Order</h3>
+      <p class="font-body text-sm mb-6 opacity-70">Enter your details below. We'll contact you to secure your roast and coordinate shipping.</p>
+      
+      <form id="order-form" class="space-y-4">
+        <input type="text" name="user_name" placeholder="Full Name" required class="w-full border-b border-[#1A1A1A] p-2 bg-transparent focus:outline-none focus:border-[#C8A97E]">
+        <input type="email" name="user_email" placeholder="Email Address" required class="w-full border-b border-[#1A1A1A] p-2 bg-transparent focus:outline-none focus:border-[#C8A97E]">
+        
+        <div class="flex items-center gap-4">
+            <span class="text-sm font-bold uppercase tracking-widest">Quantity:</span>
+            <input type="number" name="quantity" value="1" min="1" class="w-20 border-b border-[#1A1A1A] p-2 bg-transparent focus:outline-none focus:border-[#C8A97E]">
+        </div>
+        
+        <textarea name="address" placeholder="Shipping Address" required class="w-full border border-[#1A1A1A]/30 p-2 bg-transparent h-24 focus:outline-none focus:border-[#C8A97E] mt-2"></textarea>
+        
+        <button type="submit" id="submit-btn" class="w-full bg-[#1A1A1A] text-[#E8D8C4] font-bebas text-xl py-3 tracking-widest hover:bg-[#C8A97E] hover:text-[#1A1A1A] transition-all">
+          Send Request
+        </button>
+      </form>
+    </div>
+  </div>
+
   <script>
     // --- UI LOGIC ---
-    // 1. Header Scroll
     window.addEventListener("scroll", () => {
       const h = document.getElementById("main-header");
       if(window.scrollY > 40) {
@@ -249,7 +273,6 @@
       }
     });
 
-    // 2. Reveal Animations (Intersection Observer)
     document.addEventListener("DOMContentLoaded", () => {
       const obs = new IntersectionObserver((entries) => {
         entries.forEach(e => {
@@ -260,11 +283,12 @@
         });
       }, { threshold: 0.15 });
       document.querySelectorAll(".reveal-section").forEach(el => obs.observe(el));
+      
+      // Initialize EmailJS (REPLACE WITH YOUR PUBLIC KEY)
+      emailjs.init("YOUR_PUBLIC_KEY");
     });
 
-    // 3. Tab Logic
     function switchTab(tabId) {
-      // Buttons
       document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('text-[#C8A97E]', 'border-[#C8A97E]');
         btn.classList.add('text-[#F5F5F5]/40', 'border-transparent');
@@ -273,7 +297,6 @@
       activeBtn.classList.remove('text-[#F5F5F5]/40', 'border-transparent');
       activeBtn.classList.add('text-[#C8A97E]', 'border-[#C8A97E]');
 
-      // Content
       document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.add('hidden');
         content.classList.remove('block');
@@ -282,6 +305,32 @@
       activeContent.classList.remove('hidden');
       activeContent.classList.add('block');
     }
+
+    // --- ORDER MODAL & EMAILJS LOGIC ---
+    function openOrderModal() { document.getElementById('orderModal').classList.replace('hidden', 'flex'); }
+    function closeOrderModal() { document.getElementById('orderModal').classList.replace('flex', 'hidden'); }
+    
+    document.getElementById('order-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const submitBtn = document.getElementById('submit-btn');
+      submitBtn.innerText = "Sending...";
+      submitBtn.disabled = true;
+
+      // REPLACE WITH YOUR SERVICE ID AND TEMPLATE ID
+      emailjs.sendForm('service_w4njwvb', 'template_tt9d0tt', this)
+        .then(function() {
+            alert('Request successfully sent! We will reach out to you shortly.');
+            closeOrderModal();
+            document.getElementById('order-form').reset();
+            submitBtn.innerText = "Send Request";
+            submitBtn.disabled = false;
+        }, function(error) {
+            console.log('FAILED...', error);
+            alert('Failed to send order. Please try again later.');
+            submitBtn.innerText = "Send Request";
+            submitBtn.disabled = false;
+        });
+    });
 
     // --- GAME LOGIC ---
     const canvas = document.getElementById('snake-canvas');
@@ -319,13 +368,11 @@
       
       if (!started) { drawBean(W/2, H/2, CELL*0.46); return; }
 
-      // Food
       const pulse = 0.54 + Math.sin(Date.now() * 0.006) * 0.14;
       ctx.save(); ctx.shadowColor = "#C8A97E"; ctx.shadowBlur = 14 * pulse;
       drawBean(food.x*CELL+CELL/2, food.y*CELL+CELL/2, CELL * 0.48 * pulse);
       ctx.restore();
 
-      // Snake
       snake.forEach((seg, i) => {
         drawBean(seg.x*CELL+CELL/2, seg.y*CELL+CELL/2, CELL*0.46, Math.max(0.42, 1-i*0.04));
       });
@@ -393,7 +440,6 @@
       nextDir = { x:d[0], y:d[1] };
     });
     
-    // Draw initial state
     drawBean(W/2, H/2, CELL*0.46);
   </script>
 </body>
