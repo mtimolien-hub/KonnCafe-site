@@ -317,7 +317,7 @@
       submitBtn.disabled = true;
 
       // REPLACE WITH YOUR SERVICE ID AND TEMPLATE ID
-      emailjs.sendForm('service_w4njwvb', 'template_tt9d0tt', this)
+      emailjs.sendForm(service_w4njwvb, template_tt9d0tt, this)
         .then(function() {
             alert('Request successfully sent! We will reach out to you shortly.');
             closeOrderModal();
