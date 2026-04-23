@@ -454,6 +454,816 @@
     const W = CELL * COLS, H = CELL * ROWS;
     // Responsive canvas scaling for high-DPI and mobile:
     function resizeCanvas() {
+      // Compute CSS size to best-fit the viewport while preserving aspect ratio
+      const DPR = Math.max(1, window.devicePixelRatio || 1);
+      const container = canvas.parentElement || document.body;
+      const viewport = window.innerWidth || document.documentElement.clientWidth;
+      const padding = viewport < 640 ? 24 : 0;
+      const availableRaw = (container.clientWidth || viewport) - padding;
+      const available = Math.min(W, Math.max(200, availableRaw));
+      let cssWidth = available;
+      let cssHeight = Math.round(cssWidth * (H / W));
+      const maxHeight = Math.max(160, (window.innerHeight || 600) - 180);
+      if (cssHeight > maxHeight) {
+        cssHeight = maxHeight;
+        cssWidth = Math.round(cssHeight * (W / H));
+      }
+
+      // Apply CSS size (what the page sees)
+      canvas.style.width = cssWidth + 'px';
+      canvas.style.height = cssHeight + 'px';
+
+      // Backing pixel buffer sized to CSS * DPR
+      const backingW = Math.round(cssWidth * DPR);
+      const backingH = Math.round(cssHeight * DPR);
+      canvas.width = backingW;
+      canvas.height = backingH;
+
+      // Compute scale to map game logical coordinates (W x H) to backing pixels
+      // This ensures game coords 0..W map correctly to the displayed CSS size,
+      // preventing off-by-scale cropping that made beans disappear at edges.
+      const scaleX = backingW / W;
+      const scaleY = backingH / H;
+      // use uniform scale to preserve aspect
+      const scale = Math.min(scaleX, scaleY);
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+
+      // Add a small transparent margin so shadows/specular highlights near edges aren't clipped.
+      // We'll draw within logical padding (in game units).
+      // NOTE: draw() uses W/H for layout; when drawing, avoid placing visual-only effects beyond 0..W range.
+      try { draw(); } catch (err) { /* draw may not be defined yet */ }
+    }
+    // run initially and on resizes / orientation changes
+    window.addEventListener('resize', resizeCanvas, { passive: true });
+    window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 120));
+    // call once after script loads (DOM already ready for this element)
+    resizeCanvas();
+
+    let score = 0, best = 0;
+    let snake, dir, nextDir, food, over, started, raf, lastTime, accum, speed, cupAnim;
+
+    function rp() { return { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) }; }
+
+    function initGame() {
+      snake = [{ x:12, y:9 }, { x:11, y:9 }, { x:10, y:9 }];
+      dir = { x:1, y:0 }; nextDir = { x:1, y:0 };
+      food = rp(); over = false; cupAnim = 0;
+      lastTime = performance.now(); speed = 130; accum = 0;
+      score = 0; updateScoreUI();
+    }
+
+    // REPLACE existing drawBean function
+    function drawBean(x, y, r, alpha = 1) {
+      // higher-contrast bean rendering for better visibility on mobile
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(x, y);
+      // brighter base and warm highlight
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 0.56, r * 0.38, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "#7A4218";
+      ctx.shadowColor = "rgba(200,169,126,0.95)";
+      ctx.shadowBlur = 18 * Math.max(0.6, alpha);
+      ctx.fill();
+      // specular highlight
+      ctx.beginPath();
+      ctx.ellipse(-r * 0.12, -r * 0.12, r * 0.14, r * 0.08, -0.5, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.28)";
+      ctx.fill();
+      ctx.restore();
+      // reset shadow
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
+    }
+
+    // REPLACE initial part of draw() to deepen background & increase food shadow
+    function draw() {
+      // slightly deeper background to increase bean contrast
+      ctx.fillStyle = "#050505"; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = "rgba(200,169,126,0.045)"; ctx.lineWidth = 0.5;
+      for (let x=0; x<=COLS; x++) { ctx.beginPath(); ctx.moveTo(x*CELL,0); ctx.lineTo(x*CELL,H); ctx.stroke(); }
+      for (let y=0; y<=ROWS; y++) { ctx.beginPath(); ctx.moveTo(0,y*CELL); ctx.lineTo(W,y*CELL); ctx.stroke(); }
+      
+      if (!started) { drawBean(W/2, H/2, CELL*0.46); return; }
+
+      const pulse = 0.54 + Math.sin(Date.now() * 0.006) * 0.14;
+      ctx.save();
+      ctx.shadowColor = "rgba(200,169,126,0.96)";
+      ctx.shadowBlur = 22 * Math.max(0.6, pulse);
+      drawBean(food.x*CELL+CELL/2, food.y*CELL+CELL/2, CELL * 0.48 * pulse);
+      ctx.restore();
+
+      snake.forEach((seg, i) => {
+        drawBean(seg.x*CELL+CELL/2, seg.y*CELL+CELL/2, CELL*0.46, Math.max(0.42, 1-i*0.04));
+      });
+    }
+
+    function tick(ts) {
+      if (over) return;
+      const dt = Math.min(ts - lastTime, 200);
+      lastTime = ts; accum += dt;
+      
+      if (accum >= speed) {
+        accum -= speed; dir = { ...nextDir };
+        const hd = { x:(snake[0].x+dir.x+COLS)%COLS, y:(snake[0].y+dir.y+ROWS)%ROWS };
+        
+        if (snake.some(sg => sg.x===hd.x && sg.y===hd.y)) {
+          over = true; showOverlay(true);
+          if(score > best) best = score;
+          return;
+        }
+        
+        snake.unshift(hd);
+        if (hd.x===food.x && hd.y===food.y) {
+          score += 10; speed = Math.max(52, speed - 2); updateScoreUI();
+          let nf; do { nf = rp(); } while (snake.some(sg => sg.x===nf.x && sg.y===nf.y));
+          food = nf;
+        } else { snake.pop(); }
+      }
+      draw();
+      raf = requestAnimationFrame(tick);
+    }
+
+    function showOverlay(isGameOver) {
+      document.getElementById('game-overlay').classList.remove('hidden');
+      document.getElementById('game-score-display').classList.add('hidden');
+      // show on-screen touch controls when overlay is visible (so mobile users can start)
+      const tcShow = document.getElementById('touch-controls');
+      if (tcShow) tcShow.classList.remove('hidden');
+      if(isGameOver) {
+        document.getElementById('game-title').innerText = "GAME OVER";
+        document.getElementById('game-subtitle').innerText = "Score: " + score;
+        document.getElementById('btn-start-game').innerText = "Play Again";
+      }
+    }
+    
+    function hideOverlay() {
+      document.getElementById('game-overlay').classList.add('hidden');
+      document.getElementById('game-score-display').classList.remove('hidden');
+      // hide on-screen touch controls while the game is active so they don't obstruct view
+      const tcHide = document.getElementById('touch-controls');
+      if (tcHide) tcHide.classList.add('hidden');
+    }
+
+    function updateScoreUI() {
+      document.getElementById('val-score').innerText = score;
+      document.getElementById('val-best').innerText = best;
+    }
+
+    document.getElementById('btn-start-game').addEventListener('click', () => {
+      hideOverlay(); started = true; initGame();
+      if(raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(tick);
+    });
+
+    window.addEventListener("keydown", e => {
+      if(!started || over) return;
+      const map = { ArrowUp:[0,-1], w:[0,-1], ArrowDown:[0,1], s:[0,1], ArrowLeft:[-1,0], a:[-1,0], ArrowRight:[1,0], d:[1,0] };
+      const d = map[e.key]; if(!d) return;
+      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].indexOf(e.key) > -1) e.preventDefault();
+      if(d[0]!==0 && dir.x!==0) return;
+      if(d[1]!==0 && dir.y!==0) return;
+      nextDir = { x:d[0], y:d[1] };
+    });
+    
+    // --- TOUCH / SWIPE handlers (for mobile) ---
+    let touchStartX = 0, touchStartY = 0;
+    const SWIPE_THRESHOLD = 18; // pixels, tuned for mobile
+
+    function applyDir(x, y) {
+      if(!started || over) return;
+      // prevent 180-degree reversal
+      if ((x !== 0 && dir.x !== 0) || (y !== 0 && dir.y !== 0)) return;
+      nextDir = { x, y };
+    }
+
+    function handleTouchStart(e) {
+      if(e.touches && e.touches.length) {
+        const t = e.touches[0];
+        touchStartX = t.clientX; touchStartY = t.clientY;
+      }
+    }
+    function handleTouchEnd(e) {
+      const touch = (e.changedTouches && e.changedTouches[0]);
+      if(!touch) return;
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      if(Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) {
+        // short tap — if game not started, start it; otherwise ignore
+        if(!started && !over) {
+          hideOverlay(); started = true; initGame();
+          if(raf) cancelAnimationFrame(raf);
+          raf = requestAnimationFrame(tick);
+        }
+        return;
+      }
+      // choose dominant axis
+      if(Math.abs(dx) > Math.abs(dy)) {
+        if(dx > 0) applyDir(1,0); else applyDir(-1,0);
+      } else {
+        if(dy > 0) applyDir(0,1); else applyDir(0,-1);
+      }
+      // start game on first swipe/tap
+      if(!started && !over) {
+        hideOverlay(); started = true; initGame();
+        if(raf) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(tick);
+      }
+    }
+
+    // attach to canvas
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    // on-screen buttons
+    document.querySelectorAll('#touch-controls .tc-btn').forEach(btn => {
+      btn.addEventListener('touchstart', (ev) => {
+        ev.preventDefault(); // prevent page scroll
+        const [x,y] = btn.dataset.dir.split(',').map(Number);
+        if(!started && !over) {
+          hideOverlay(); started = true; initGame();
+          if(raf) cancelAnimationFrame(raf);
+          raf = requestAnimationFrame(tick);
+        }
+        applyDir(x,y);
+      }, { passive: false });
+
+      btn.addEventListener('click', () => {
+        const [x,y] = btn.dataset.dir.split(',').map(Number);
+        if(!started && !over) {
+          hideOverlay(); started = true; initGame();
+          if(raf) cancelAnimationFrame(raf);
+          raf = requestAnimationFrame(tick);
+        }
+        applyDir(x,y);
+      });
+    });
+    
+    drawBean(W/2, H/2, CELL*0.46);
+
+    // --- Translations: dictionaries for en, fr, ht ---
+    const I18N = {
+      en: {
+        "nav.story": "Story",
+        "nav.product": "Product",
+        "nav.game": "Game",
+        "nav.roots": "Roots",
+        "header.phone": "+1 (203) 626-4931",
+        "shop.now": "Shop Now",
+        "hero.tagline": "Small-Batch · Specialty Coffee",
+        "hero.title": "Haitian Roots.<br /><span class=\"text-[#E8D8C4]\">Bold Flavor.</span>",
+        "product.collection": "The Collection",
+        "product.espresso": "Espresso",
+        "product.size": "Ground · 8 oz",
+        "product.add": "Add to Cart — $13.99",
+        "story.titleTag": "The Story",
+        "story.title": "More Than<br /><span class=\"text-[#E8D8C4]\">a Cup.</span>",
+        "game.takeabreak": "Take a Break",
+        "game.title": "Coffee Bean Snake",
+        "game.subtitle": "Swallow every bean — grow stronger. Lose yourself and the snake becomes a steaming KonnCafe cup.",
+        "game.start": "Start Game",
+        "game.playagain": "Play Again",
+        "order.title": "Request an Order",
+        "order.desc": "Enter your details below. We'll contact you to secure your roast and coordinate shipping.",
+        "order.name": "Full Name",
+        "order.email": "Email Address",
+        "order.address": "Shipping Address",
+        "order.send": "Send Request",
+        "footer.crafted": "Crafted in Connecticut, USA",
+        "footer.copyright": "© 2026 KonnCafe. Finest Latin American beans, roasted to perfection."
+      },
+      fr: {
+        "nav.story": "Histoire",
+        "nav.product": "Produit",
+        "nav.game": "Jeu",
+        "nav.roots": "Racines",
+        "header.phone": "+1 (203) 626-4931",
+        "shop.now": "Boutique",
+        "hero.tagline": "Petite torréfaction · Café de spécialité",
+        "hero.title": "Racines haïtiennes.<br /><span class=\"text-[#E8D8C4]\">Saveur audacieuse.</span>",
+        "product.collection": "La Collection",
+        "product.espresso": "Espresso",
+        "product.size": "Moulu · 8 oz",
+        "product.add": "Ajouter au panier — $13.99",
+        "story.titleTag": "L'histoire",
+        "story.title": "Plus qu'une<br /><span class=\"text-[#E8D8C4]\">tasse.</span>",
+        "game.takeabreak": "Faites une pause",
+        "game.title": "Serpent de grains",
+        "game.subtitle": "Avalez chaque grain — devenez plus fort. Perdez-vous et le serpent devient une tasse KonnCafe fumante.",
+        "game.start": "Commencer le jeu",
+        "game.playagain": "Rejouer",
+        "order.title": "Demande de commande",
+        "order.desc": "Entrez vos informations ci‑dessous. Nous vous contacterons pour confirmer votre torréfaction et organiser l'expédition.",
+        "order.name": "Nom complet",
+        "order.email": "Adresse e-mail",
+        "order.address": "Adresse de livraison",
+        "order.send": "Envoyer la demande",
+        "footer.crafted": "Fabriqué dans le Connecticut, États‑Unis",
+        "footer.copyright": "© 2026 KonnCafe. Les meilleurs grains d'Amérique latine, torréfiés à la perfection."
+      },
+      ht: {
+        "nav.story": "Istwa",
+        "nav.product": "Pwodwi",
+        "nav.game": "Jwèt",
+        "nav.roots": "Rasin",
+        "header.phone": "+1 (203) 626-4931",
+        "shop.now": "Achte kounye a",
+        "hero.tagline": "Ti-pak · Kafe Espesyal",
+        "hero.title": "Rasin Ayisyen.<br /><span class=\"text-[#E8D8C4]\">Gou vanyan.</span>",
+        "product.collection": "Koleksyon an",
+        "product.espresso": "Espreso",
+        "product.size": "Moulu · 8 oz",
+        "product.add": "Ajoute nan pann — $13.99",
+        "story.titleTag": "Istwa a",
+        "story.title": "Plis pase<br /><span class=\"text-[#E8D8C4]\">yon tas.</span>",
+        "game.takeabreak": "Pran yon repo",
+        "game.title": "Serpent Gren Kafe",
+        "game.subtitle": "Vale chak grenn — vin pi fò. Pèdi tèt ou e serpent la tounen yon tas KonnCafe k ap fimen.",
+        "game.start": "Kòmanse jwèt la",
+        "game.playagain": "Jwe ankò",
+        "order.title": "Mande yon kòmann",
+        "order.desc": "Antre detay ou anba a. N ap kontakte w pou nou konfime demann lan epi òganize livrezon an.",
+        "order.name": "Non konplè",
+        "order.email": "Adrès Imèl",
+        "order.address": "Adrès livrezon",
+        "order.send": "Voye demann lan",
+        "footer.crafted": "Fè nan Connecticut, USA",
+        "footer.copyright": "© 2026 KonnCafe. Pi bon grenn Amerik Latin, rennen pou pafè."
+      }
+    };
+
+    function applyTranslations(lang) {
+      const dict = I18N[lang] || I18N.en;
+      // text nodes
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (!key) return;
+        const val = dict[key];
+        if (val === undefined) return;
+        if (el.getAttribute('data-i18n-html') === 'true') el.innerHTML = val;
+        else el.innerText = val;
+      });
+      // placeholders
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(inp => {
+        const pkey = inp.getAttribute('data-i18n-placeholder');
+        if (!pkey) return;
+        const pval = dict[pkey];
+        if (pval !== undefined) inp.placeholder = pval;
+      });
+      // game-specific ids
+      if (dict['game.title']) document.getElementById('game-title').innerText = dict['game.title'];
+      if (dict['game.subtitle']) document.getElementById('game-subtitle').innerText = dict['game.subtitle'];
+      if (dict['game.start']) document.getElementById('btn-start-game').innerText = dict['game.start'];
+      if (dict['game.playagain'] && document.getElementById('btn-start-game').innerText === 'Play Again') {
+        document.getElementById('btn-start-game').innerText = dict['game.playagain'];
+      }
+      // store
+      localStorage.setItem('konn_lang', lang);
+      // active button style
+      document.querySelectorAll('.lang-btn').forEach(b => {
+        b.style.background = (b.dataset.lang === lang) ? '#C8A97E' : 'transparent';
+        b.style.color = (b.dataset.lang === lang) ? '#1A1A1A' : '#F5F5F5';
+      });
+    }
+
+    // wire up language buttons
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const L = btn.dataset.lang || 'en';
+        applyTranslations(L);
+      });
+    });
+
+    // initialize language from storage or browser (run after DOM ready to guarantee all elements exist)
+    const savedLang = localStorage.getItem('konn_lang') || (navigator.language && navigator.language.startsWith('fr') ? 'fr' : 'en');
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => applyTranslations(savedLang));
+    } else {
+      applyTranslations(savedLang);
+    }
+  </script>
+</body>
+</html>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            "konncafe-black": "#1A1A1A",
+            "konncafe-sand":  "#E8D8C4",
+            "konncafe-smoke": "#F5F5F5",
+            "konncafe-gold":  "#C8A97E",
+            background: "#1A1A1A", warmth: "#E8D8C4", foreground: "#F5F5F5", accent: "#C8A97E",
+          },
+          fontFamily: {
+            display: ["'Bebas Neue'", "Impact", "sans-serif"],
+            body: ["'Lato'", "Helvetica Neue", "Arial", "sans-serif"],
+          },
+          animation: {
+            "fade-up": "fadeUp 1s ease-out forwards",
+            "fade-in": "fadeIn 1s ease-out forwards",
+          },
+          keyframes: {
+            fadeUp: { "0%": { opacity: "0", transform: "translateY(30px)" }, "100%": { opacity: "1", transform: "translateY(0)" } },
+            fadeIn: { "0%": { opacity: "0" }, "100%": { opacity: "1" } },
+            kcMq: { "0%": { transform: "translateX(0)" }, "100%": { transform: "translateX(-50%)" } }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body { font-family: 'Lato', sans-serif; background-color: #1A1A1A; color: #F5F5F5; overflow-x: hidden; }
+    .font-bebas { font-family: 'Bebas Neue', Impact, sans-serif; text-transform: uppercase; letter-spacing: 0.04em; }
+    .gold-rule { height: 1px; width: 100%; background: linear-gradient(to right, transparent, #C8A97E, transparent); }
+    
+    .reveal-section { transition: all 800ms cubic-bezier(0.19, 1, 0.22, 1); opacity: 0; transform: translateY(2rem); }
+    .reveal-section.shown { opacity: 1; transform: translateY(0); }
+    
+    /* Perfect Infinite Loop Marquee */
+    @keyframes kcMq {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    /* ensure the container is wide and children don't shrink so -50% produces motion */
+    .animate-marquee {
+      display: inline-flex;
+      width: 200%;
+      animation: kcMq 25s linear infinite;
+      will-change: transform;
+    }
+    .animate-marquee > * { flex: 0 0 auto; }
+    .animate-marquee:hover { animation-play-state: paused; }
+
+    /* respect reduced motion preference */
+    @media (prefers-reduced-motion: reduce) {
+      .animate-marquee { animation: none !important; }
+    }
+
+    /* Responsive canvas + touch rule for mobile */
+    #snake-canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-width: 528px; /* native canvas logical size */
+      touch-action: none; /* prevent browser gestures interfering with game */
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* small helper for mobile overlay hint */
+    .game-overlay-hint {
+      position: absolute;
+      bottom: 14%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10,10,10,0.78);
+      color: #F5F5F5;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      z-index: 60;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <header id="main-header" class="fixed top-0 left-0 right-0 z-50 transition-all duration-500 py-6 bg-transparent">
+    <div class="max-w-[1400px] mx-auto px-6 md:px-12 flex items-center justify-between gap-4">
+      <a href="#" aria-label="KonnCafe Home">
+        <span class="font-bebas text-[30px] md:text-[36px] text-[#F5F5F5] hover:text-[#C8A97E] transition-colors duration-300 tracking-[0.12em]">KONNCAFE</span>
+      </a>
+      <nav class="hidden md:flex items-center gap-7">
+        <a href="#story" data-i18n="nav.story" class="text-[14px] text-[#F5F5F5]/65 uppercase tracking-[0.15em] hover:text-[#C8A97E] transition-colors duration-300">Story</a>
+        <a href="#product" data-i18n="nav.product" class="text-[14px] text-[#F5F5F5]/65 uppercase tracking-[0.15em] hover:text-[#C8A97E] transition-colors duration-300">Product</a>
+        <a href="#game" data-i18n="nav.game" class="text-[14px] text-[#F5F5F5]/65 uppercase tracking-[0.15em] hover:text-[#C8A97E] transition-colors duration-300">Game</a>
+        <a href="#roots" data-i18n="nav.roots" class="text-[14px] text-[#F5F5F5]/65 uppercase tracking-[0.15em] hover:text-[#C8A97E] transition-colors duration-300">Roots</a>
+      </nav>
+      <div class="hidden md:flex items-center gap-5">
+        <a href="tel:+12036264931" data-i18n="header.phone" class="text-[14px] text-[#C8A97E]/65 hover:text-[#C8A97E] transition-colors duration-300 tracking-[0.03em]">+1 (203) 626-4931</a>
+        <div class="flex items-center gap-4">
+          <button id="btn-shop" data-i18n="shop.now" onclick="openOrderModal()" class="border border-[#C8A97E] text-[#C8A97E] text-[14px] uppercase tracking-[0.14em] px-6 py-2.5 hover:bg-[#C8A97E] hover:text-[#1A1A1A] transition-all duration-300">Shop Now</button>
+
+          <!-- Language toggles -->
+          <div id="lang-toggle-group" class="flex items-center gap-2">
+            <button class="lang-btn" data-lang="en" aria-label="English" title="English" style="width:36px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#F5F5F5">EN</button>
+            <button class="lang-btn" data-lang="fr" aria-label="Français" title="Français" style="width:36px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#F5F5F5">FR</button>
+            <button class="lang-btn" data-lang="ht" aria-label="Kreyòl ayisyen" title="Kreyòl" style="width:36px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#F5F5F5">HT</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile language toggles (floating, visible on small screens) -->
+  <div id="lang-floating" class="md:hidden fixed top-4 right-4 z-50 flex gap-2">
+    <button class="lang-btn" data-lang="en" aria-label="English" title="English" style="width:36px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#F5F5F5">EN</button>
+    <button class="lang-btn" data-lang="fr" aria-label="Français" title="Français" style="width:36px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#F5F5F5">FR</button>
+    <button class="lang-btn" data-lang="ht" aria-label="Kreyòl ayisyen" title="Kreyòl" style="width:36px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#F5F5F5">HT</button>
+  </div>
+
+  <section id="hero" class="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-[#1A1A1A]">
+    <div class="absolute inset-0" style="background: radial-gradient(ellipse 80% 60% at 70% 40%, rgba(200,169,126,0.12) 0%, transparent 60%), radial-gradient(ellipse 60% 80% at 30% 70%, rgba(232,216,196,0.06) 0%, transparent 50%), radial-gradient(ellipse 100% 100% at 50% 50%, transparent 40%, #1A1A1A 100%);"></div>
+    <div class="absolute left-[5%] md:left-[8%] top-[20%] bottom-[20%] w-px" style="background: linear-gradient(to bottom, transparent, rgba(200,169,126,0.4), transparent);"></div>
+    
+    <div class="relative z-10 text-center px-6 max-w-[900px] mx-auto">
+      <div class="mb-8 text-[14px] text-[#C8A97E] uppercase tracking-[0.35em] animate-fade-in" style="animation-delay: 0.2s;" data-i18n="hero.tagline">Small-Batch · Specialty Coffee</div>
+      <h1 data-i18n="hero.title" data-i18n-html="true" class="font-bebas text-[72px] sm:text-[96px] md:text-[120px] lg:text-[144px] text-[#F5F5F5] leading-[0.88] mb-6 animate-fade-up" style="animation-delay: 0.4s;">
+        Haitian Roots.<br /><span class="text-[#E8D8C4]">Bold Flavor.</span>
+      </h1>
+      <div class="my-8 animate-fade-in" style="animation-delay: 0.8s;"><div class="gold-rule"></div></div>
+      <div class="text-[14px] text-[#F5F5F5]/70 uppercase tracking-[0.15em] animate-fade-in flex flex-wrap items-center justify-center gap-y-2" style="animation-delay: 1s;">
+        <span class="hover:text-[#C8A97E] transition-colors duration-300">Discover the Legendary Taste</span>
+        <span class="text-[#C8A97E] mx-3 text-[9px]">◆</span>
+        <span class="hover:text-[#C8A97E] transition-colors duration-300">Awaken Your Senses</span>
+        <span class="text-[#C8A97E] mx-3 text-[9px]">◆</span>
+        <span class="hover:text-[#C8A97E] transition-colors duration-300">Rooted in Mystique</span>
+      </div>
+      <div class="mt-14 flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-up" style="animation-delay: 1.2s;">
+        <button onclick="openOrderModal()" class="text-[14px] uppercase tracking-[0.2em] bg-[#C8A97E] text-[#1A1A1A] font-bold px-10 py-4 hover:bg-[#DFC49A] transition-all shadow-[0_0_40px_rgba(200,169,126,0.3)]">Shop the Collection</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="bg-[#E8D8C4] py-5 overflow-hidden">
+    <div class="flex items-center whitespace-nowrap animate-marquee">
+      <span class="font-bebas text-[17px] text-[#1A1A1A] tracking-[0.18em] flex items-center gap-10 px-8">HAITIAN-INSPIRED <span class="text-[#C8A97E] text-[8px]">◆</span> LATIN AMERICAN BEANS <span class="text-[#C8A97E] text-[8px]">◆</span> CRAFTED IN CONNECTICUT, USA <span class="text-[#C8A97E] text-[8px]">◆</span> SMALL-BATCH ROASTED <span class="text-[#C8A97E] text-[8px]">◆</span> HAITIAN-INSPIRED <span class="text-[#C8A97E] text-[8px]">◆</span> LATIN AMERICAN BEANS <span class="text-[#C8A97E] text-[8px]">◆</span> CRAFTED IN CONNECTICUT, USA <span class="text-[#C8A97E] text-[8px]">◆</span> SMALL-BATCH ROASTED <span class="text-[#C8A97E] text-[8px]">◆</span></span>
+      <span class="font-bebas text-[17px] text-[#1A1A1A] tracking-[0.18em] flex items-center gap-10 px-8">HAITIAN-INSPIRED <span class="text-[#C8A97E] text-[8px]">◆</span> LATIN AMERICAN BEANS <span class="text-[#C8A97E] text-[8px]">◆</span> CRAFTED IN CONNECTICUT, USA <span class="text-[#C8A97E] text-[8px]">◆</span> SMALL-BATCH ROASTED <span class="text-[#C8A97E] text-[8px]">◆</span> HAITIAN-INSPIRED <span class="text-[#C8A97E] text-[8px]">◆</span> LATIN AMERICAN BEANS <span class="text-[#C8A97E] text-[8px]">◆</span> CRAFTED IN CONNECTICUT, USA <span class="text-[#C8A97E] text-[8px]">◆</span> SMALL-BATCH ROASTED <span class="text-[#C8A97E] text-[8px]">◆</span></span>
+    </div>
+  </section>
+
+  <section id="product" class="bg-[#1A1A1A] py-32 px-6 md:px-12">
+    <div class="max-w-[1400px] mx-auto">
+      <div class="reveal-section">
+        <p data-i18n="product.collection" class="text-[14px] text-[#C8A97E] uppercase tracking-[0.3em] mb-4">The Collection</p>
+        <div class="gold-rule mb-16"></div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
+        <div class="reveal-section" style="transition-delay: 100ms;">
+          <div class="relative aspect-[4/5] flex items-center justify-center overflow-hidden border border-[rgba(200,169,126,0.2)]" style="background: radial-gradient(ellipse 80% 80% at 50% 40%, rgba(200,169,126,0.12) 0%, rgba(26,26,26,0.6) 60%, #111 100%);">
+            <div class="relative w-3/5 max-w-[240px] aspect-[3/4] flex items-center justify-center">
+              <img src="./images/konncafebag0.png" alt="KonnCafe Espresso Ground 8 oz" class="object-contain drop-shadow-[0_20px_48px_rgba(0,0,0,0.85)]" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'240\' height=\'320\'><rect width=\'240\' height=\'320\' fill=\'%23111\'/><text x=\'50%\' y=\'50%\' fill=\'%23C8A97E\' font-family=\'Impact\' font-size=\'20\' text-anchor=\'middle\'>PRODUCT IMAGE</text></svg>'"/>
+            </div>
+            <div class="absolute -bottom-4 -right-4 w-24 h-24 rounded-full flex flex-col items-center justify-center text-center bg-[#C8A97E] shadow-[0_8px_32px_rgba(200,169,126,0.4)]">
+              <span class="font-bebas text-[11px] text-[#1A1A1A] tracking-[0.1em] leading-none">SMALL<br/>BATCH</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="reveal-section lg:pt-4" style="transition-delay: 200ms;">
+          <h2 data-i18n="product.espresso" class="font-bebas text-[56px] md:text-[72px] text-[#F5F5F5] leading-[0.9] mb-2">Espresso</h2>
+          <p data-i18n="product.size" class="text-[14px] text-[#C8A97E] uppercase tracking-[0.3em] mb-8">Ground · 8 oz</p>
+          <div class="gold-rule mb-8"></div>
+          
+          <div class="flex items-end gap-6 mb-10">
+            <span class="font-bebas text-[40px] text-[#F5F5F5]">$13.99</span>
+            <span class="text-[14px] text-[#F5F5F5]/35 mb-2 line-through">$18.00</span>
+          </div>
+
+          <button id="btn-add-to-cart" data-i18n="product.add" onclick="openOrderModal()" class="w-full text-[14px] uppercase tracking-[0.2em] font-bold bg-[#C8A97E] text-[#1A1A1A] py-4 mb-4 hover:bg-[#DFC49A] transition-all">Add to Cart — $13.99</button>
+
+          <div class="flex border-b border-[rgba(245,245,245,0.1)] mb-8">
+            <button onclick="switchTab('notes')" id="btn-notes" class="tab-btn pb-3 mr-7 text-[14px] uppercase tracking-[0.12em] transition-all border-b-2 -mb-px text-[#C8A97E] border-[#C8A97E]">Treasured Notes</button>
+            <button onclick="switchTab('brewing')" id="btn-brewing" class="tab-btn pb-3 mr-7 text-[14px] uppercase tracking-[0.12em] transition-all border-b-2 -mb-px text-[#F5F5F5]/40 border-transparent hover:text-[#F5F5F5]/70">Unlock the Richness</button>
+            <button onclick="switchTab('origin')" id="btn-origin" class="tab-btn pb-3 mr-7 text-[14px] uppercase tracking-[0.12em] transition-all border-b-2 -mb-px text-[#F5F5F5]/40 border-transparent hover:text-[#F5F5F5]/70">Origins</button>
+          </div>
+
+          <div id="tab-notes" class="tab-content animate-fade-in block">
+            <ul class="space-y-4">
+              <li class="flex gap-4 items-start"><span class="mt-1 text-[#C8A97E] text-[9px]">◆</span><span><span class="font-bebas text-[18px] text-[#F5F5F5] block">Brown Sugar</span><span class="text-[14px] text-[#F5F5F5]/60">A warm, comforting sweetness.</span></span></li>
+              <li class="flex gap-4 items-start"><span class="mt-1 text-[#C8A97E] text-[9px]">◆</span><span><span class="font-bebas text-[18px] text-[#F5F5F5] block">Dark Chocolate</span><span class="text-[14px] text-[#F5F5F5]/60">Deep, bittersweet undertones.</span></span></li>
+            </ul>
+          </div>
+
+          <div id="tab-brewing" class="tab-content animate-fade-in hidden">
+            <ul class="space-y-4">
+              <li class="flex gap-4 items-start"><span class="font-bebas text-[30px] text-[#C8A97E]/30 leading-none">01</span><span><span class="font-bebas text-[15px] text-[#C8A97E] block tracking-[0.1em]">French Press</span><span class="text-[14px] text-[#F5F5F5]/60">Coarse grind. Steep 4 min.</span></span></li>
+              <li class="flex gap-4 items-start"><span class="font-bebas text-[30px] text-[#C8A97E]/30 leading-none">02</span><span><span class="font-bebas text-[15px] text-[#C8A97E] block tracking-[0.1em]">Espresso</span><span class="text-[14px] text-[#F5F5F5]/60">Fine grind. Target 25–30 sec pull.</span></span></li>
+            </ul>
+          </div>
+
+          <div id="tab-origin" class="tab-content animate-fade-in hidden">
+             <p class="text-[16px] text-[#F5F5F5]/70 mb-4">Finest Latin American beans, roasted to perfection.</p>
+             <div class="border-l-2 border-[#C8A97E] pl-4 py-1"><p class="text-[14px] text-[#C8A97E] uppercase tracking-[0.15em]">Crafted in Connecticut, USA</p></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="story" class="relative bg-[#1A1A1A] py-32 px-6 md:px-12 overflow-hidden">
+    <div class="relative z-10 max-w-[1400px] mx-auto">
+      <div class="reveal-section">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <div>
+            <p data-i18n="story.titleTag" class="text-[14px] text-[#C8A97E] uppercase tracking-[0.3em] mb-4">The Story</p>
+            <h2 data-i18n="story.title" data-i18n-html="true" class="font-bebas text-[64px] md:text-[88px] text-[#F5F5F5] leading-[0.9] mb-8">More Than<br /><span class="text-[#E8D8C4]">a Cup.</span></h2>
+            <div class="gold-rule mb-8"></div>
+            <p class="text-[16px] text-[#F5F5F5]/70 mb-5">Inspired by the rich heritage of Haiti, we craft our coffee with passion and care right here in Connecticut. Every cup is a tribute to tradition — bold, honest, and made with purpose.</p>
+          </div>
+          <div class="space-y-6">
+            <div class="flex gap-6 p-6 border-l-2 border-[#C8A97E]/25 bg-[#2E2E2E]/10 hover:bg-[#2E2E2E]/40 transition-all">
+              <span class="text-[#C8A97E] text-[22px] mt-1">◈</span>
+              <div><h3 class="font-bebas text-[22px] text-[#F5F5F5] tracking-[0.06em] mb-2">Heritage</h3><p class="text-[14px] text-[#F5F5F5]/60">Haitian-inspired recipes and rituals.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="game" class="bg-[#111] py-24 px-6 md:px-12 border-t border-[rgba(200,169,126,0.1)]">
+    <div class="max-w-[1400px] mx-auto">
+      <div class="reveal-section text-center mb-12">
+        <p class="text-[14px] text-[#C8A97E] uppercase tracking-[0.3em] mb-4">Take a Break</p>
+        <h2 class="font-bebas text-[56px] md:text-[72px] text-[#F5F5F5] leading-[0.9] mb-4">Coffee Bean<br /><span class="text-[#C8A97E]">Snake</span></h2>
+      </div>
+      
+      <div class="flex flex-col items-center gap-5 reveal-section" style="transition-delay: 200ms;">
+        <div class="relative border border-[rgba(200,169,126,0.3)] shadow-[0_0_40px_rgba(200,169,126,0.07)]">
+          <canvas id="snake-canvas" width="528" height="396" class="block max-w-full"></canvas>
+          
+          <div id="game-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0A0A0A]/80 backdrop-blur-sm z-10">
+            <p id="game-title" class="font-bebas text-[30px] text-[#F5F5F5] mb-2">COFFEE BEAN SNAKE</p>
+            <p id="game-subtitle" class="text-[14px] text-[#F5F5F5]/50 uppercase tracking-[0.12em] mb-7">Swallow every bean — grow stronger. Lose yourself and the snake becomes a steaming KonnCafe cup.</p>
+            <button id="btn-start-game" class="text-[14px] uppercase tracking-[0.22em] font-bold bg-[#C8A97E] text-[#1A1A1A] px-10 py-3 hover:bg-[#DFC49A] transition-colors">Start Game</button>
+          </div>
+
+          <!-- Mobile touch controls (visible on small screens) -->
+          <div id="touch-controls" class="md:hidden absolute left-0 right-0 bottom-4 flex items-center justify-center gap-3 z-20 px-4">
+            <button data-dir="0,-1" class="tc-btn w-12 h-12 rounded-full bg-[#1A1A1A] text-[#C8A97E] font-bold">↑</button>
+            <div class="flex gap-3">
+              <button data-dir="-1,0" class="tc-btn w-12 h-12 rounded-full bg-[#1A1A1A] text-[#C8A97E] font-bold">◀</button>
+              <button data-dir="1,0" class="tc-btn w-12 h-12 rounded-full bg-[#1A1A1A] text-[#C8A97E] font-bold">▶</button>
+            </div>
+            <button data-dir="0,1" class="tc-btn w-12 h-12 rounded-full bg-[#1A1A1A] text-[#C8A97E] font-bold">↓</button>
+          </div>
+        </div>
+        <p id="game-score-display" class="text-[14px] text-[#F5F5F5]/45 uppercase tracking-[0.2em] hidden">
+          Score: <span id="val-score" class="text-[#C8A97E] font-bold">0</span> &nbsp;&nbsp;
+          Best: <span id="val-best" class="text-[#F5F5F5]/60">0</span>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="roots" class="relative bg-[#111] py-32 px-6 md:px-12 text-center">
+    <div class="reveal-section max-w-[900px] mx-auto">
+      <p class="text-[14px] text-[#C8A97E] uppercase tracking-[0.3em] mb-6">Rooted in Mystique</p>
+      <h2 class="font-bebas text-[56px] md:text-[80px] text-[#F5F5F5] leading-[0.9] mb-8">Where Identity<br /><span class="text-[#C8A97E]">Meets the Cup</span></h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-14">
+        <div><div class="font-bebas text-[40px] text-[#C8A97E]">100%</div><div class="text-[14px] text-[#F5F5F5]/50 uppercase tracking-[0.15em] mt-2">Latin American Beans</div></div>
+        <div><div class="font-bebas text-[40px] text-[#C8A97E]">Small</div><div class="text-[14px] text-[#F5F5F5]/50 uppercase tracking-[0.15em] mt-2">Batch Roasted</div></div>
+        <div><div class="font-bebas text-[40px] text-[#C8A97E]">CT</div><div class="text-[14px] text-[#F5F5F5]/50 uppercase tracking-[0.15em] mt-2">Crafted in Connecticut</div></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="bg-[#111] pt-16 pb-10 px-6 md:px-12 border-t border-[rgba(200,169,126,0.12)]">
+    <div class="max-w-[1400px] mx-auto text-center">
+      <span class="font-bebas text-[34px] text-[#F5F5F5] tracking-[0.12em] block mb-3">KONNCAFE</span>
+      <p data-i18n="footer.crafted" class="text-[14px] text-[#C8A97E] uppercase tracking-[0.2em] mb-10">Crafted in Connecticut, USA</p>
+      <div class="gold-rule mb-6"></div>
+      <p data-i18n="footer.copyright" class="text-[14px] text-[#F5F5F5]/30">© 2026 KonnCafe. Finest Latin American beans, roasted to perfection.</p>
+    </div>
+  </footer>
+
+  <div id="orderModal" class="fixed inset-0 bg-[#1A1A1A]/95 z-[100] hidden items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-[#F5F5F5] text-[#1A1A1A] p-8 max-w-md w-full relative border border-[#C8A97E]">
+      <button onclick="closeOrderModal()" class="absolute top-4 right-4 text-3xl font-bold">&times;</button>
+      <h3 data-i18n="order.title" class="font-bebas text-4xl mb-2">Request an Order</h3>
+      <p data-i18n="order.desc" class="font-body text-sm mb-6 opacity-70">Enter your details below. We'll contact you to secure your roast and coordinate shipping.</p>
+      
+      <form id="order-form" class="space-y-4">
+        <input data-i18n-placeholder="order.name" type="text" name="user_name" placeholder="Full Name" required class="w-full border-b border-[#1A1A1A] p-2 bg-transparent focus:outline-none focus:border-[#C8A97E]">
+        <input data-i18n-placeholder="order.email" type="email" name="user_email" placeholder="Email Address" required class="w-full border-b border-[#1A1A1A] p-2 bg-transparent focus:outline-none focus:border-[#C8A97E]">
+        
+        <div class="flex items-center gap-4">
+            <span class="text-sm font-bold uppercase tracking-widest">Quantity:</span>
+            <input type="number" name="quantity" value="1" min="1" class="w-20 border-b border-[#1A1A1A] p-2 bg-transparent focus:outline-none focus:border-[#C8A97E]">
+        </div>
+        
+        <textarea data-i18n-placeholder="order.address" name="address" placeholder="Shipping Address" required class="w-full border border-[#1A1A1A]/30 p-2 bg-transparent h-24 focus:outline-none focus:border-[#C8A97E] mt-2"></textarea>
+        
+        <button type="submit" id="submit-btn" data-i18n="order.send" class="w-full bg-[#1A1A1A] text-[#E8D8C4] font-bebas text-xl py-3 tracking-widest hover:bg-[#C8A97E] hover:text-[#1A1A1A] transition-all">
+          Send Request
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // --- UI LOGIC ---
+    window.addEventListener("scroll", () => {
+      const h = document.getElementById("main-header");
+      if(window.scrollY > 40) {
+        h.classList.add("bg-[#1A1A1A]/95", "backdrop-blur-sm", "border-b", "border-[rgba(200,169,126,0.15)]", "py-3");
+        h.classList.remove("bg-transparent", "py-6");
+      } else {
+        h.classList.remove("bg-[#1A1A1A]/95", "backdrop-blur-sm", "border-b", "border-[rgba(200,169,126,0.15)]", "py-3");
+        h.classList.add("bg-transparent", "py-6");
+      }
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const obs = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+          if(e.isIntersecting) {
+            e.target.classList.add("shown");
+            obs.unobserve(e.target);
+          }
+        });
+      }, { threshold: 0.15 });
+      document.querySelectorAll(".reveal-section").forEach(el => obs.observe(el));
+      
+      // Initialize EmailJS (REPLACE WITH YOUR PUBLIC KEY)
+      emailjs.init('KWggFxVe5XZ6hJKQ4');
+
+      // --- Mobile instruction helper (insert here) ---
+      // ensure the subtitle contains requested copy (QA)
+      const subtitle = document.getElementById('game-subtitle');
+      if (subtitle) {
+        subtitle.innerText = "Swallow every bean — grow stronger. Lose yourself and the snake becomes a steaming KonnCafe cup.";
+      }
+
+      // show a transient how-to hint for touch users on first touch
+      const canvasEl = document.getElementById('snake-canvas');
+      if (canvasEl && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) {
+        const showTouchHint = (ev) => {
+          ev.preventDefault && ev.preventDefault();
+          const overlay = document.getElementById('game-overlay');
+          if (!overlay) return;
+          const hint = document.createElement('div');
+          hint.id = 'mobile-instructions';
+          hint.setAttribute('role','status');
+          hint.style.cssText = "position:absolute;bottom:14%;left:50%;transform:translateX(-50%);background:rgba(10,10,10,0.78);color:#F5F5F5;padding:8px 12px;border-radius:8px;font-size:13px;z-index:60;pointer-events:none;";
+          hint.innerText = "Tap to start. Swipe to change direction, or use on-screen controls.";
+          overlay.appendChild(hint);
+          setTimeout(() => { hint.remove(); }, 3500);
+          canvasEl.removeEventListener('touchstart', showTouchHint);
+        };
+        canvasEl.addEventListener('touchstart', showTouchHint, { passive: false });
+      }
+    });
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('text-[#C8A97E]', 'border-[#C8A97E]');
+        btn.classList.add('text-[#F5F5F5]/40', 'border-transparent');
+      });
+      const activeBtn = document.getElementById('btn-' + tabId);
+      activeBtn.classList.remove('text-[#F5F5F5]/40', 'border-transparent');
+      activeBtn.classList.add('text-[#C8A97E]', 'border-[#C8A97E]');
+
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+        content.classList.remove('block');
+      });
+      const activeContent = document.getElementById('tab-' + tabId);
+      activeContent.classList.remove('hidden');
+      activeContent.classList.add('block');
+    }
+
+    // --- ORDER MODAL & EMAILJS LOGIC ---
+    function openOrderModal() { document.getElementById('orderModal').classList.replace('hidden', 'flex'); }
+    function closeOrderModal() { document.getElementById('orderModal').classList.replace('flex', 'hidden'); }
+    
+    document.getElementById('order-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const submitBtn = document.getElementById('submit-btn');
+      submitBtn.innerText = "Sending...";
+      submitBtn.disabled = true;
+
+      // REPLACE WITH YOUR SERVICE ID AND TEMPLATE ID
+      emailjs.sendForm('service_w4njwvb', 'template_tt9d0tt', this)
+        .then(function() {
+            alert('Request successfully sent! We will reach out to you shortly.');
+            closeOrderModal();
+            document.getElementById('order-form').reset();
+            submitBtn.innerText = "Send Request";
+            submitBtn.disabled = false;
+        }, function(error) {
+            console.log('FAILED...', error);
+            alert('Failed to send order. Please try again later.');
+            submitBtn.innerText = "Send Request";
+            submitBtn.disabled = false;
+        });
+    });
+
+    // --- GAME LOGIC ---
+    const canvas = document.getElementById('snake-canvas');
+    const ctx = canvas.getContext('2d');
+    const CELL = 22, COLS = 24, ROWS = 18;
+    const W = CELL * COLS, H = CELL * ROWS;
+    // Responsive canvas scaling for high-DPI and mobile:
+    function resizeCanvas() {
       const DPR = Math.max(1, window.devicePixelRatio || 1);
       // parent container width (available CSS width)
       const container = canvas.parentElement || document.body;
