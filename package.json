@@ -1,0 +1,29 @@
+{
+  "name": "konncafe-site",
+  "version": "0.1.0",
+  "private": true,
+  "description": "KONNCAFÉ mobile-first site (Tailwind + PostCSS) with i18n and embedded game",
+  "engines": {
+    "node": ">=16"
+  },
+  "scripts": {
+    "dev:css": "tailwindcss -i ./src/css/input.css -o ./public/assets/tailwind.css --watch",
+    "build:css": "tailwindcss -i ./src/css/input.css -o ./public/assets/tailwind.css --minify",
+    "build:js": "esbuild src/js/main.js --bundle --outfile=public/assets/main.js --format=esm --platform=browser --minify",
+    "dev": "npm-run-all --parallel dev:css serve:dev",
+    "build": "npm run build:css && npm run build:js",
+    "serve:dev": "sirv public --single --dev --port 5000",
+    "start": "sirv public --single --port 5000"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.14",
+    "esbuild": "^0.28.0",
+    "npm-run-all": "^4.1.5",
+    "postcss": "^8.4.24",
+    "sirv-cli": "^2.0.2",
+    "tailwindcss": "^3.4.7"
+  },
+  "browserslist": [
+    "defaults"
+  ]
+}

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title data-i18n="meta.title">KONNCAFÉ — Haitian Roots. Bold Flavor.</title>
+  <meta name="description" content="" data-i18n="meta.description" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="assets/tailwind.css" />
+</head>
+<body class="bg-konncafe-black text-konncafe-smoke overflow-x-hidden font-body">
+  <!-- Dynamic module loader: try built bundle first, fall back gracefully when serving only static HTML -->
+  <script>
+    (async () => {
+      const candidates = [
+        '/assets/main.js',
+        'assets/main.js'
+      ];
+      // small helper: ensure tailwind.css exists before loading UI bundle (optional)
+      async function ensureCSS() {
+        try {
+          const cssResp = await fetch('/assets/tailwind.css', { method: 'HEAD' });
+          return cssResp.ok;
+        } catch (e) { return false; }
+      }
+
+      async function exists(url) {
+        try {
+          const res = await fetch(url, { method: 'HEAD' });
+          return res.ok;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      // wait briefly for CSS to be built when running local dev (non-blocking)
+      if (!await ensureCSS()) {
+        console.info('tailwind.css not found at /assets/tailwind.css — build assets (npm run build:css)');
+      }
+ 
+      for (const c of candidates) {
+        if (await exists(c)) {
+          try {
+            await import(c);
+            console.info('Loaded module:', c);
+            return;
+          } catch (err) {
+            console.warn('Module import failed for', c, err);
+          }
+        }
+      }
+      console.info('No client module loaded (running HTML-only).');
+    })();
+  </script>
+
+  <header id="main-header" class="fixed inset-x-0 top-0 z-50 py-4 bg-transparent transition-all backdrop-blur-none">
+    <div class="max-w-[1400px] mx-auto px-4 md:px-8 flex items-center justify-between gap-4">
+      <a href="#" aria-label="KONNCAFÉ Home" class="inline-flex items-center">
+        <span class="font-bebas text-2xl md:text-3xl tracking-widest text-konncafe-smoke" data-i18n="brand">KONNCAFÉ</span>
+      </a>
+
+      <nav id="nav-desktop" class="hidden md:flex items-center gap-5" aria-label="Primary">
+        <a href="#story" class="nav-link text-xs uppercase tracking-wider" data-i18n="nav.story">Story</a>
+        <a href="#product" class="nav-link text-xs uppercase tracking-wider" data-i18n="nav.product">Product</a>
+        <a href="#game" class="nav-link text-xs uppercase tracking-wider" data-i18n="nav.game">Game</a>
+        <a href="#roots" class="nav-link text-xs uppercase tracking-wider" data-i18n="nav.roots">Roots</a>
+      </nav>
+
+      <div class="flex items-center gap-3">
+        <a href="tel:+12036264931" class="hidden md:inline-block text-xs text-konncafe-gold/80" data-i18n="contact.phone">+1 (203) 626-4931</a>
+
+        <button id="btn-shop" class="btn-primary" data-i18n="cta.shop">Shop Now</button>
+
+        <button id="btn-menu" class="md:hidden p-2 rounded-md" aria-label="Open menu">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M4 7h16M4 12h16M4 17h16" stroke="#F5F5F5" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Drawer -->
+  <div id="drawer" class="fixed inset-y-0 right-0 w-3/4 max-w-sm bg-konncafe-black/98 transform translate-x-full transition-transform z-60 p-6 safe-area">
+    <button id="btn-drawer-close" aria-label="Close" class="mb-6 text-2xl">&times;</button>
+    <nav class="flex flex-col gap-4">
+      <a href="#story" class="py-3 text-base" data-i18n="nav.story">Story</a>
+      <a href="#product" class="py-3 text-base" data-i18n="nav.product">Product</a>
+      <a href="#game" class="py-3 text-base" data-i18n="nav.game">Game</a>
+      <a href="#roots" class="py-3 text-base" data-i18n="nav.roots">Roots</a>
+    </nav>
+  </div>
+
+  <!-- HERO -->
+  <main>
+    <section id="hero" class="relative min-h-screen flex items-center justify-center py-24">
+      <div class="absolute inset-0 hero-loop will-change-transform"></div>
+
+      <div class="relative z-10 text-center px-6 max-w-[900px] mx-auto">
+        <div class="text-xs text-konncafe-gold uppercase tracking-widest mb-4" data-i18n="hero.sub">Small-Batch · Specialty Coffee</div>
+        <h1 class="font-bebas text-5xl sm:text-6xl md:text-7xl leading-tight" data-i18n="hero.title">Haitian Roots.<br/><span class="text-konncafe-sand">Bold Flavor.</span></h1>
+
+        <div class="my-8"><div class="gold-rule mx-auto w-3/4"></div></div>
+
+        <p class="text-xs text-konncafe-smoke/70 uppercase tracking-wider flex flex-wrap items-center justify-center gap-2" data-i18n="hero.tagline">Discover the Legendary Taste · Awaken Your Senses · Rooted in Mystique</p>
+
+        <div class="mt-8">
+          <button id="btn-shop-hero" class="btn-cta mt-4" data-i18n="cta.shop_collection">Shop the Collection</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- MARQUEE -->
+    <section class="bg-konncafe-sand py-4 overflow-hidden">
+      <div class="animate-marquee" aria-hidden>
+        <span class="font-bebas text-sm text-konncafe-black px-8" data-i18n="marquee.text">HAITIAN-INSPIRED · LATIN AMERICAN BEANS · CRAFTED IN CONNECTICUT, USA · SMALL-BATCH ROASTED</span>
+        <span class="font-bebas text-sm text-konncafe-black px-8" aria-hidden>HAITIAN-INSPIRED · LATIN AMERICAN BEANS · CRAFTED IN CONNECTICUT, USA · SMALL-BATCH ROASTED</span>
+      </div>
+    </section>
+
+    <!-- PRODUCT -->
+    <section id="product" class="py-16 px-4 md:px-12 bg-konncafe-black">
+      <div class="max-w-[1400px] mx-auto">
+        <div class="reveal-section">
+          <p class="text-xs text-konncafe-gold uppercase tracking-widest mb-4" data-i18n="collection.title">The Collection</p>
+          <div class="gold-rule mb-10"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+          <div class="reveal-section">
+            <div class="relative aspect-[4/5] flex items-center justify-center overflow-hidden border border-konncafe-gold/20">
+              <div class="relative w-3/5 max-w-[240px] aspect-[3/4] flex items-center justify-center">
+                <img src="./images/konncafebag0.png" alt="" data-i18n-alt="product.imageAlt" class="object-contain drop-shadow-lg" />
+              </div>
+
+              <div class="absolute -bottom-4 -right-4 w-24 h-24 rounded-full flex items-center justify-center bg-konncafe-gold">
+                <span class="font-bebas text-xs text-konncafe-black leading-none text-center" data-i18n="badge.small_batch">SMALL<br/>BATCH</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="reveal-section">
+            <h2 class="font-bebas text-4xl md:text-5xl mb-2" data-i18n="product.name">Espresso</h2>
+            <p class="text-xs text-konncafe-gold uppercase tracking-widest mb-6" data-i18n="product.variant">Ground · 8 oz</p>
+            <div class="gold-rule mb-6"></div>
+
+            <div class="flex items-end gap-4 mb-6">
+              <span class="font-bebas text-3xl text-konncafe-smoke" data-i18n="product.price">$13.99</span>
+              <span class="line-through text-xs text-konncafe-smoke/40" data-i18n="product.price_old">$18.00</span>
+            </div>
+
+            <button class="btn-primary w-full" id="btn-add-to-cart" data-i18n="cta.add_to_cart">Add to Cart — $13.99</button>
+
+            <div class="flex border-b border-konncafe-smoke/10 mt-6">
+              <button class="tab-btn active pb-3 mr-6 text-xs uppercase" data-tab="notes" data-i18n="tabs.notes">Treasured Notes</button>
+              <button class="tab-btn pb-3 mr-6 text-xs uppercase" data-tab="brewing" data-i18n="tabs.brewing">Unlock the Richness</button>
+              <button class="tab-btn pb-3 mr-6 text-xs uppercase" data-tab="origin" data-i18n="tabs.origin">Origins</button>
+            </div>
+
+            <div id="tab-notes" class="tab-content mt-6 block">
+              <ul class="space-y-4">
+                <li><strong class="font-bebas text-lg" data-i18n="notes.brown_sugar">Brown Sugar</strong><div class="text-sm text-konncafe-smoke/60" data-i18n="notes.brown_sugar_desc">A warm, comforting sweetness.</div></li>
+                <li><strong class="font-bebas text-lg" data-i18n="notes.dark_chocolate">Dark Chocolate</strong><div class="text-sm text-konncafe-smoke/60" data-i18n="notes.dark_chocolate_desc">Deep, bittersweet undertones.</div></li>
+              </ul>
+            </div>
+
+            <div id="tab-brewing" class="tab-content mt-6 hidden">
+              <ul class="space-y-4">
+                <li><span class="font-bebas text-xl text-konncafe-gold/30" aria-hidden>01</span><div><strong data-i18n="brewing.french_press">French Press</strong><div class="text-sm text-konncafe-smoke/60" data-i18n="brewing.french_press_desc">Coarse grind. Steep 4 min.</div></div></li>
+                <li><span class="font-bebas text-xl text-konncafe-gold/30" aria-hidden>02</span><div><strong data-i18n="brewing.espresso">Espresso</strong><div class="text-sm text-konncafe-smoke/60" data-i18n="brewing.espresso_desc">Fine grind. Target 25–30 sec pull.</div></div></li>
+              </ul>
+            </div>
+
+            <div id="tab-origin" class="tab-content mt-6 hidden">
+              <p class="text-sm text-konncafe-smoke/70 mb-4" data-i18n="origin.summary">Finest Latin American beans, roasted to perfection.</p>
+              <div class="border-l-2 border-konncafe-gold pl-4 py-1"><p class="text-xs text-konncafe-gold uppercase tracking-wider" data-i18n="origin.crafted">Crafted in Connecticut, USA</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GAME -->
+    <section id="game" class="py-12 px-4 md:px-12 bg-[#111] border-t border-konncafe-gold/10">
+      <div class="max-w-[1400px] mx-auto">
+        <div class="text-center mb-8">
+          <p class="text-xs text-konncafe-gold uppercase tracking-wider mb-2" data-i18n="game.title_sub">Take a Break</p>
+          <h2 class="font-bebas text-4xl md:text-5xl" data-i18n="game.title">Coffee Bean<br/><span class="text-konncafe-gold">Snake</span></h2>
+        </div>
+
+        <div class="flex flex-col items-center gap-5">
+          <div class="relative border border-konncafe-gold/30">
+            <canvas id="snake-canvas" width="528" height="396" class="block max-w-full"></canvas>
+
+            <div id="game-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0A0A0A]/80 backdrop-blur-sm z-10">
+              <p id="game-title" class="font-bebas text-2xl text-konncafe-smoke mb-2" data-i18n="game.overlay.title">COFFEE BEAN SNAKE</p>
+              <p id="game-subtitle" class="text-xs text-konncafe-smoke/50 uppercase tracking-wider mb-6" data-i18n="game.overlay.subtitle">Arrow Keys / Swipe</p>
+              <button id="btn-start-game" class="btn-primary" data-i18n="game.overlay.start">Start Game</button>
+            </div>
+          </div>
+
+          <p id="game-score-display" class="text-xs text-konncafe-smoke/45 uppercase tracking-wider hidden">
+            <span data-i18n="game.score">Score</span>: <span id="val-score" class="text-konncafe-gold font-bold">0</span> &nbsp;&nbsp;
+            <span data-i18n="game.best">Best</span>: <span id="val-best" class="text-konncafe-smoke/60">0</span>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROOTS -->
+    <section id="roots" class="py-16 px-4 md:px-12 text-center bg-[#111]">
+      <div class="max-w-[900px] mx-auto">
+        <p class="text-xs text-konncafe-gold uppercase tracking-wider mb-4" data-i18n="roots.sub">Rooted in Mystique</p>
+        <h2 class="font-bebas text-4xl md:text-5xl mb-6" data-i18n="roots.title">Where Identity<br/><span class="text-konncafe-gold">Meets the Cup</span></h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+          <div><div class="font-bebas text-3xl text-konncafe-gold">100%</div><div class="text-xs text-konncafe-smoke/50 uppercase mt-2" data-i18n="roots.feature_1">Latin American Beans</div></div>
+          <div><div class="font-bebas text-3xl text-konncafe-gold">Small</div><div class="text-xs text-konncafe-smoke/50 uppercase mt-2" data-i18n="roots.feature_2">Batch Roasted</div></div>
+          <div><div class="font-bebas text-3xl text-konncafe-gold">CT</div><div class="text-xs text-konncafe-smoke/50 uppercase mt-2" data-i18n="roots.feature_3">Crafted in Connecticut</div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pt-12 pb-safe px-4 md:px-12 bg-[#111] border-t border-konncafe-gold/12">
+    <div class="max-w-[1400px] mx-auto text-center">
+      <span class="font-bebas text-2xl text-konncafe-smoke block mb-3" data-i18n="brand">KONNCAFÉ</span>
+      <p class="text-xs text-konncafe-gold uppercase tracking-wider mb-6" data-i18n="footer.sub">Crafted in Connecticut, USA</p>
+      <div class="gold-rule mb-6 mx-auto w-3/4"></div>
+      <p class="text-xs text-konncafe-smoke/30">© <span data-i18n="footer.year">2026</span> KONNCAFÉ. <span data-i18n="footer.copy">Finest Latin American beans, roasted to perfection.</span></p>
+    </div>
+  </footer>
+
+  <!-- Order Modal (structure preserved IDs) -->
+  <div id="orderModal" class="fixed inset-0 bg-[#1A1A1A]/95 z-50 hidden items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-konncafe-smoke text-konncafe-black p-6 max-w-md w-full relative border border-konncafe-gold">
+      <button id="order-close" class="absolute top-3 right-3 text-2xl">&times;</button>
+      <h3 class="font-bebas text-2xl mb-2" data-i18n="order.title">Request an Order</h3>
+      <p class="text-sm mb-4 text-konncafe-black/70" data-i18n="order.desc">Enter your details below. We'll contact you to secure your roast and coordinate shipping.</p>
+
+      <form id="order-form" class="space-y-3">
+        <input name="user_name" placeholder="" data-i18n-placeholder="order.form.name" required class="w-full p-2 border-b bg-transparent focus:outline-none" />
+        <input name="user_email" type="email" placeholder="" data-i18n-placeholder="order.form.email" required class="w-full p-2 border-b bg-transparent focus:outline-none" />
+        <div class="flex items-center gap-3">
+          <label class="text-sm font-bold uppercase tracking-widest" data-i18n="order.form.quantity_label">Quantity:</label>
+          <input name="quantity" type="number" value="1" min="1" class="w-20 p-2 border-b bg-transparent focus:outline-none" />
+        </div>
+        <textarea name="address" placeholder="" data-i18n-placeholder="order.form.address" required class="w-full p-2 border bg-transparent h-24 focus:outline-none"></textarea>
+
+        <button type="submit" id="btn-submit" class="w-full bg-konncafe-black text-konncafe-sand py-3 font-bebas">Send Request</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Floating Language Toggle -->
+  <div id="lang-toggle" class="lang-toggle safe-area-right" aria-hidden>
+    <button data-lang="en" class="lang-btn active">EN</button>
+    <button data-lang="es" class="lang-btn">ES</button>
+    <button data-lang="ht" class="lang-btn">HT</button>
+    <button data-lang="fr" class="lang-btn">FR</button>
+  </div>
+</body>
+</html>
