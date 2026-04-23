@@ -1,4 +1,37 @@
-<!DOCTYPE html>
+``````html
+// filepath: /Users/m.timolien/Downloads/index.html
+// ...existing code...
+  <style>
+    body { font-family: 'Lato', sans-serif; background-color: #1A1A1A; color: #F5F5F5; overflow-x: hidden; }
+    .font-bebas { font-family: 'Bebas Neue', Impact, sans-serif; text-transform: uppercase; letter-spacing: 0.04em; }
+    .gold-rule { height: 1px; width: 100%; background: linear-gradient(to right, transparent, #C8A97E, transparent); }
+    
+    .reveal-section { transition: all 800ms cubic-bezier(0.19, 1, 0.22, 1); opacity: 0; transform: translateY(2rem); }
+    .reveal-section.shown { opacity: 1; transform: translateY(0); }
+    
+    /* Perfect Infinite Loop Marquee */
+    @keyframes kcMq {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    /* ensure the container is wide and children don't shrink so -50% produces motion */
+    .animate-marquee {
+      display: inline-flex;
+      width: 200%;
+      animation: kcMq 25s linear infinite;
+      will-change: transform;
+    }
+    .animate-marquee > * { flex: 0 0 auto; }
+    .animate-marquee:hover { animation-play-state: paused; }
+
+    /* respect reduced motion preference */
+    @media (prefers-reduced-motion: reduce) {
+      .animate-marquee { animation: none !important; }
+    }
+  </style>
+...
+```<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -10,8 +43,30 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&display=swap" rel="stylesheet" />
 
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/..." rel="stylesheet" />
   
+  <!-- INSERT tailwind.config here (before the CDN) -->
+  <script>
+    // ensure the global exists before assigning config (prevents "tailwind is not defined")
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
+      theme: {
+        extend: {
+          animation: {
+            "fade-up": "fadeUp 1s ease-out forwards",
+            "fade-in": "fadeIn 1s ease-out forwards",
+            "kc-mq": "kcMq 25s linear infinite"
+          },
+          keyframes: {
+            fadeUp: { "0%": { opacity: "0", transform: "translateY(30px)" }, "100%": { opacity: "1", transform: "translateY(0)" } },
+            fadeIn: { "0%": { opacity: "0" }, "100%": { opacity: "1" } },
+            kcMq: { "0%": { transform: "translateX(0)" }, "100%": { transform: "translateX(-50%)" } }
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
   
   <script>
@@ -285,7 +340,7 @@
       document.querySelectorAll(".reveal-section").forEach(el => obs.observe(el));
       
       // Initialize EmailJS (REPLACE WITH YOUR PUBLIC KEY)
-      emailjs.init(KWggFxVe5XZ6hJKQ4);
+      emailjs.init('KWggFxVe5XZ6hJKQ4');
     });
 
     function switchTab(tabId) {
@@ -317,7 +372,7 @@
       submitBtn.disabled = true;
 
       // REPLACE WITH YOUR SERVICE ID AND TEMPLATE ID
-      emailjs.sendForm(service_w4njwvb, template_tt9d0tt, this)
+      emailjs.sendForm('service_w4njwvb', 'template_tt9d0tt', this)
         .then(function() {
             alert('Request successfully sent! We will reach out to you shortly.');
             closeOrderModal();
@@ -438,6 +493,79 @@
       if(d[0]!==0 && dir.x!==0) return;
       if(d[1]!==0 && dir.y!==0) return;
       nextDir = { x:d[0], y:d[1] };
+    });
+    
+    // --- TOUCH / SWIPE handlers (for mobile) ---
+    let touchStartX = 0, touchStartY = 0;
+    const SWIPE_THRESHOLD = 18; // pixels, tuned for mobile
+
+    function applyDir(x, y) {
+      if(!started || over) return;
+      // prevent 180-degree reversal
+      if ((x !== 0 && dir.x !== 0) || (y !== 0 && dir.y !== 0)) return;
+      nextDir = { x, y };
+    }
+
+    function handleTouchStart(e) {
+      if(e.touches && e.touches.length) {
+        const t = e.touches[0];
+        touchStartX = t.clientX; touchStartY = t.clientY;
+      }
+    }
+    function handleTouchEnd(e) {
+      const touch = (e.changedTouches && e.changedTouches[0]);
+      if(!touch) return;
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      if(Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) {
+        // short tap — if game not started, start it; otherwise ignore
+        if(!started && !over) {
+          hideOverlay(); started = true; initGame();
+          if(raf) cancelAnimationFrame(raf);
+          raf = requestAnimationFrame(tick);
+        }
+        return;
+      }
+      // choose dominant axis
+      if(Math.abs(dx) > Math.abs(dy)) {
+        if(dx > 0) applyDir(1,0); else applyDir(-1,0);
+      } else {
+        if(dy > 0) applyDir(0,1); else applyDir(0,-1);
+      }
+      // start game on first swipe/tap
+      if(!started && !over) {
+        hideOverlay(); started = true; initGame();
+        if(raf) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(tick);
+      }
+    }
+
+    // attach to canvas
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    // on-screen buttons
+    document.querySelectorAll('#touch-controls .tc-btn').forEach(btn => {
+      btn.addEventListener('touchstart', (ev) => {
+        ev.preventDefault(); // prevent page scroll
+        const [x,y] = btn.dataset.dir.split(',').map(Number);
+        if(!started && !over) {
+          hideOverlay(); started = true; initGame();
+          if(raf) cancelAnimationFrame(raf);
+          raf = requestAnimationFrame(tick);
+        }
+        applyDir(x,y);
+      }, { passive: false });
+
+      btn.addEventListener('click', () => {
+        const [x,y] = btn.dataset.dir.split(',').map(Number);
+        if(!started && !over) {
+          hideOverlay(); started = true; initGame();
+          if(raf) cancelAnimationFrame(raf);
+          raf = requestAnimationFrame(tick);
+        }
+        applyDir(x,y);
+      });
     });
     
     drawBean(W/2, H/2, CELL*0.46);
